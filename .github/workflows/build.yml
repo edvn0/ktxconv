@@ -34,8 +34,21 @@ jobs:
             cc: clang-18
             cxx: clang++-18
 
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/CPM
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache CPM sources
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CPM_SOURCE_CACHE }}
+          key: cpm-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.version }}-${{ hashFiles('CMakeLists.txt', 'cmake/CPM.cmake') }}
+          restore-keys: |
+            cpm-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.version }}-
+            cpm-${{ runner.os }}-${{ matrix.compiler }}-
+            cpm-${{ runner.os }}-
 
       - name: Show compiler
         run: |
@@ -50,25 +63,50 @@ jobs:
           cmake -S . -B build
           -G Ninja
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCPM_SOURCE_CACHE="${{ env.CPM_SOURCE_CACHE }}"
 
       - name: Build
         run: cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: >
+          ctest --test-dir build
+          --output-on-failure
+          --output-junit ctest-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-linux-${{ matrix.compiler }}-${{ matrix.version }}
+          path: build/ctest-results.xml
+          if-no-files-found: error
 
   test-windows-msvc:
     name: windows-msvc
     runs-on: windows-2025
 
+    env:
+      CPM_SOURCE_CACHE: ${{ github.workspace }}\.cache\CPM
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache CPM sources
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CPM_SOURCE_CACHE }}
+          key: cpm-${{ runner.os }}-msvc-${{ hashFiles('CMakeLists.txt', 'cmake/CPM.cmake') }}
+          restore-keys: |
+            cpm-${{ runner.os }}-msvc-
+            cpm-${{ runner.os }}-
 
       - name: Configure
         run: >
           cmake -S . -B build
           -G "Visual Studio 17 2022"
           -A x64
+          -DCPM_SOURCE_CACHE="${{ env.CPM_SOURCE_CACHE }}"
 
       - name: Build
         run: >
@@ -81,3 +119,12 @@ jobs:
           ctest --test-dir build
           -C RelWithDebInfo
           --output-on-failure
+          --output-junit ctest-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows-msvc
+          path: build/ctest-results.xml
+          if-no-files-found: error
