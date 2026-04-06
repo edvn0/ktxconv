@@ -1,11 +1,12 @@
 #pragma once
 
 #include "image.hxx"
+#include "types.hxx"
 
 #include <filesystem>
 #include <concepts>
 
-enum class DecodedKtxSemantic
+enum class DecodedKtxSemantic : u8
 {
     Color,
     PackedNormalXY

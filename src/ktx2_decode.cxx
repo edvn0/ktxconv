@@ -11,17 +11,7 @@
 
 namespace
 {
-    struct KtxTextureDeleter
-    {
-        void operator()(ktxTexture* texture) const
-        {
-            if (texture != nullptr)
-            {
-                ktxTexture_Destroy(texture);
-            }
-        }
-    };
-
+    
     [[nodiscard]] auto unpack_snorm(u8 v) -> float
     {
         return (static_cast<float>(v) / 255.0f) * 2.0f - 1.0f;
@@ -50,8 +40,8 @@ auto decode_ktx2_to_rgba8(std::filesystem::path const& path) -> DecodedKtxImage
         throw std::runtime_error("failed to open ktx2 file");
     }
 
-    std::unique_ptr<ktxTexture, KtxTextureDeleter> texture {
-        reinterpret_cast<ktxTexture*>(raw_texture)
+    std::unique_ptr<ktxTexture2, Deleter> texture {
+        raw_texture
     };
 
     if (ktxTexture2_NeedsTranscoding(raw_texture))
@@ -64,7 +54,7 @@ auto decode_ktx2_to_rgba8(std::filesystem::path const& path) -> DecodedKtxImage
     }
 
     ktx_size_t offset = 0;
-    rc = ktxTexture_GetImageOffset(texture.get(), 0, 0, 0, &offset);
+    rc = ktxTexture2_GetImageOffset(texture.get(), 0, 0, 0, &offset);
     if (rc != KTX_SUCCESS)
     {
         throw std::runtime_error("failed to query image offset");
@@ -78,16 +68,13 @@ auto decode_ktx2_to_rgba8(std::filesystem::path const& path) -> DecodedKtxImage
         decoded.image.height * 4
     );
 
-    auto* data = ktxTexture_GetData(texture.get());
+    auto* data = ktxTexture_GetData(std::bit_cast<ktxTexture*>(texture.get()));
     std::memcpy(
         decoded.image.pixels.data(),
         data + offset,
         decoded.image.pixels.size()
     );
 
-    // For now: explicit heuristic for packed normal XY after normal-map encoding.
-    // Packed form is commonly X in RGB, Y in A.
-    // If RGB are nearly identical across the image, treat it as packed XY.
     usize similar_rgb_count {0};
     usize pixel_count {0};
 
@@ -97,8 +84,8 @@ auto decode_ktx2_to_rgba8(std::filesystem::path const& path) -> DecodedKtxImage
         auto const g = decoded.image.pixels[i + 1];
         auto const b = decoded.image.pixels[i + 2];
 
-        if (std::abs(static_cast<int>(r) - static_cast<int>(g)) <= 1 &&
-            std::abs(static_cast<int>(r) - static_cast<int>(b)) <= 1)
+        if (std::abs(static_cast<i32>(r) - static_cast<i32>(g)) <= 1 &&
+            std::abs(static_cast<i32>(r) - static_cast<i32>(b)) <= 1)
         {
             ++similar_rgb_count;
         }
@@ -107,7 +94,7 @@ auto decode_ktx2_to_rgba8(std::filesystem::path const& path) -> DecodedKtxImage
     }
 
     if (pixel_count > 0 &&
-        static_cast<double>(similar_rgb_count) / static_cast<double>(pixel_count) > 0.95)
+        static_cast<f64>(similar_rgb_count) / static_cast<f64>(pixel_count) > 0.95)
     {
         decoded.semantic = DecodedKtxSemantic::PackedNormalXY;
     }

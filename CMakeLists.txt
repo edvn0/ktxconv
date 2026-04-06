@@ -54,6 +54,7 @@ add_library(ktxconv
     src/mip_chain.cxx
     src/format.cxx
     src/compression.cxx
+    src/ktx_deleter.cxx
     src/ktx2_write.cxx
     src/ktx2_decode.cxx
     src/stb.cxx
@@ -144,6 +145,7 @@ if(BUILD_TESTING)
         tests/test_main.cxx
         tests/test_mip_chain.cxx
         tests/test_e2e.cxx
+        tests/test_iterator_range.cxx
     )
 
   target_link_libraries(ktxconv_tests

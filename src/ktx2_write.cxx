@@ -11,16 +11,6 @@ namespace {
   return std::string(ktxErrorString(code));
 }
 
-struct KtxTextureDeleter {
-  template <typename T>
-    requires std::is_same_v<T, ktxTexture> || std::is_same_v<T, ktxTexture2>
-  void operator()(T *texture) const {
-    if (texture != nullptr) {
-      ktxTexture_Destroy(reinterpret_cast<ktxTexture *>(texture));
-    }
-  }
-};
-
 [[nodiscard]] auto compress_texture(ktxTexture2 *texture,
                                     CompressionConfig const &compression)
     -> bool {
@@ -93,7 +83,7 @@ auto write_ktx2(std::filesystem::path const &path, PixelFormat format,
     return false;
   }
 
-  std::unique_ptr<ktxTexture2, KtxTextureDeleter> texture{raw_texture};
+  std::unique_ptr<ktxTexture2, Deleter> texture{raw_texture};
 
   for (u32 level = 0; level < mip_chain.size(); ++level) {
     auto const &image = mip_chain[level];
@@ -132,7 +122,7 @@ auto read_ktx2_info(std::filesystem::path const &path) -> Ktx2Info {
                              error_string(result));
   }
 
-  std::unique_ptr<ktxTexture2, KtxTextureDeleter> texture{raw_texture};
+  std::unique_ptr<ktxTexture2, Deleter> texture{raw_texture};
 
   Ktx2Info info{};
   info.width = texture->baseWidth;

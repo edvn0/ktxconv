@@ -1,8 +1,8 @@
 #pragma once
 
 #include "image.hxx"
+#include "types.hxx"
 
-#include <cstdint>
 
 enum class CompressionMode
 {
@@ -22,9 +22,9 @@ struct CompressionConfig
     u32 thread_count {0};
 
     bool uastc_rdo {false};
-    float uastc_rdo_quality_scalar {1.0f};
+    f32 uastc_rdo_quality_scalar {1.0f};
     u32 uastc_rdo_dict_size {4096};
-    float uastc_rdo_max_smooth_block_error_scale {10.0f};
-    float uastc_rdo_max_smooth_block_std_dev {18.0f};
+    f32 uastc_rdo_max_smooth_block_error_scale {10.0f};
+    f32 uastc_rdo_max_smooth_block_std_dev {18.0f};
 };
 [[nodiscard]] auto check_if_is_normal_map(const std::filesystem::path& filename_with_extension, Image const& image) -> bool;
