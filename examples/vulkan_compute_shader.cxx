@@ -18,7 +18,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <libpng/png.h>
+#include <libpng18/png.h>
 #include <numeric>
 #include <span>
 #include <stdexcept>
@@ -59,17 +59,15 @@ auto check(VkResult result, std::string_view what,
           loc);
 }
 
-auto flush_allocation(VmaAllocator allocator, VmaAllocation allocation,
-                      std::string_view what,
-                      std::source_location loc =
-                          std::source_location::current()) -> void {
+auto flush_allocation(
+    VmaAllocator allocator, VmaAllocation allocation, std::string_view what,
+    std::source_location loc = std::source_location::current()) -> void {
   check(vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE), what, loc);
 }
 
-auto invalidate_allocation(VmaAllocator allocator, VmaAllocation allocation,
-                           std::string_view what,
-                           std::source_location loc =
-                               std::source_location::current()) -> void {
+auto invalidate_allocation(
+    VmaAllocator allocator, VmaAllocation allocation, std::string_view what,
+    std::source_location loc = std::source_location::current()) -> void {
   check(vmaInvalidateAllocation(allocator, allocation, 0, VK_WHOLE_SIZE), what,
         loc);
 }
@@ -358,9 +356,9 @@ struct Texture : detail::non_copyable<Texture>,
   auto upload(VkCommandBuffer cmd, VmaAllocator alloc,
               std::span<std::uint8_t const> data, HostBuffer &host_buffer,
               usize row_pitch) const -> void {
-    usize const total_pixel_bytes =
-        static_cast<usize>(metadata.width) * metadata.height * 4 *
-        metadata.mip_levels * metadata.array_layers;
+    usize const total_pixel_bytes = static_cast<usize>(metadata.width) *
+                                    metadata.height * 4 * metadata.mip_levels *
+                                    metadata.array_layers;
     assert(data.size() == total_pixel_bytes);
 
     std::vector<VkBufferImageCopy> copy_regions{};
@@ -519,11 +517,27 @@ struct BindlessSet : detail::non_copyable<BindlessSet> {
 
     if (needs_rebuild) {
       const auto next_power_of_2 = [](u32 v) -> u32 {
+#ifdef __GNUC__
         if (v == 0)
           return 1;
         if ((v & (v - 1)) == 0)
           return v;
         return 1u << (32 - __builtin_clz(v));
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
+        if (v == 0)
+          return 1;
+        if ((v & (v - 1)) == 0)
+          return v;
+#else
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
+        return v;
+#endif
       };
 
       const auto new_sampled_images_size = next_power_of_2(std::max(
@@ -812,37 +826,11 @@ auto record_and_submit(ComputeDispatchContext const &ctx) -> u64 {
           },
   };
 
-  VkImageMemoryBarrier2 output_to_general{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-      .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
-      .srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
-      .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = ctx.output_tex->image,
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
-
-  std::array<VkImageMemoryBarrier2, 2> init_barriers{
-      input_to_transfer_dst,
-      output_to_general,
-  };
-
-  VkDependencyInfo init_dep{
-      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .imageMemoryBarrierCount = static_cast<u32>(init_barriers.size()),
-      .pImageMemoryBarriers = init_barriers.data(),
-  };
+VkDependencyInfo init_dep{
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &input_to_transfer_dst,
+};
 
   vkCmdPipelineBarrier2(ctx.cmd, &init_dep);
 
@@ -1571,9 +1559,8 @@ auto main() -> int {
 
   std::vector<VkSampler> sampler_views{};
   sampler_views.resize(max_samplers);
-  std::ranges::for_each(sampler_views, [s = linear_repeat_sampler](auto &smpl) {
-    smpl = s;
-  });
+  std::ranges::for_each(sampler_views,
+                        [s = linear_repeat_sampler](auto &smpl) { smpl = s; });
   sampler_views[0] = linear_repeat_sampler;
 
   std::vector<VkImageView> output_image_views{};
