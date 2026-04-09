@@ -2,3 +2,6 @@
 build
 build-ci
 compile_commands.json
+*.png
+.vscode
+.idea
